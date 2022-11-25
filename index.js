@@ -28,6 +28,17 @@ async function run() {
     const usersCollection = client.db("yourmoto").collection("users");
     const productsCollection = client.db("yourmoto").collection("products");
 
+    const verifyAdmin = async(req, res, next) => {
+        const decodedEmail = req.decoded.email;
+        const query = { email: decodedEmail };
+        const user = await usersCollection.findOne(query);
+        console.log(user);
+        if (user?.role !== "admin") {
+            return res.status(403).send({ message: "forbidden access" });
+          }
+          next();
+    }
+
     /* ---------Categories------- */
     app.get("/categories", async (req, res) => {
       const query = {};
@@ -44,6 +55,13 @@ async function run() {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
+    /* -----------Single User---------- */
+    app.get('/users/:email',  async (req, res) => {
+        const email = req.params.email
+        const query = { email: email }
+        const user = await usersCollection.findOne(query)
+        res.send(user)
+      })
 
 
     /* ------------Add Product to Database----------- */
