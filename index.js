@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-/* const jwt = require("jsonwebtoken"); */
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 /* const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); */
 
@@ -21,11 +21,10 @@ function verifyJWT(req, res, next) {
   }
   const token = authHeader.split(" ")[1];
 
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+  jwt.verify(token, process.env.ACCESS_TOKEN, function (err, decoded) {
     if (err) {
       return res.status(403).send({ message: "Forbidden Access" });
     }
-    console.log(decoded);
     req.decoded = decoded;
     next();
   });
@@ -52,31 +51,34 @@ async function run() {
     const verifyAdmin = async (req, res, next) => {
       const decodedEmail = req.decoded.email;
       const query = { email: decodedEmail };
+      console.log(query);
       const user = await usersCollection.findOne(query);
       console.log(user);
-      if (user?.role !== "admin") {
+      if (user?.role !== "seller") {
         return res.status(403).send({ message: "forbidden access" });
       }
       next();
     };
 
     /* --------- JWT ------ */
-    app.put("/jwt", async (req, res) => {
-      const email = req.params.email;
-      const filter = { email: email };
+    app.get("/jwt", async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email };
       const user = await usersCollection.findOne(query);
       if (user) {
         const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, {
           expiresIn: "5h",
         });
+        console.log(token)
         return res.send({ accessToken: token });
       }
       res.status(403).send({ accessToken: "" });
     });
 
+  
 
     /* ---------Categories------- */
-    app.get("/categories", async (req, res) => {
+    app.get("/categories",  async (req, res) => {
       const query = {};
       const result = await categoriesCollection.find(query).toArray();
       res.send(result);
@@ -105,7 +107,7 @@ async function run() {
       res.send(result);
     });
     /* --------------Get Product by CategoryName------------- */
-    app.get("/categories/:categoryName", async (req, res) => {
+    app.get("/categories/:categoryName",verifyJWT, verifyAdmin, async (req, res) => {
       const categoryName = req.params.categoryName;
       const query = { bike_type: categoryName };
       const result = await productsCollection.find(query).toArray();
