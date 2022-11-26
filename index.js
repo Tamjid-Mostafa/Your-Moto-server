@@ -15,12 +15,11 @@ app.use(express.json());
 /* -------------JWT Decode------------  */
 function verifyJWT(req, res, next) {
   const authHeader = req.headers.authorization;
-
   if (!authHeader) {
     return res.status(401).send({ message: "Unauthorized Access" });
   }
   const token = authHeader.split(" ")[1];
-
+console.log(token);
   jwt.verify(token, process.env.ACCESS_TOKEN, function (err, decoded) {
     if (err) {
       return res.status(403).send({ message: "Forbidden Access" });
@@ -33,8 +32,6 @@ function verifyJWT(req, res, next) {
 /* ----------Database Connection---------- */
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.j8jry5z.mongodb.net/?retryWrites=true&w=majority`;
 
-console.log(uri);
-
 const client = new MongoClient(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -46,39 +43,56 @@ async function run() {
     const categoriesCollection = client.db("yourmoto").collection("categories");
     const usersCollection = client.db("yourmoto").collection("users");
     const productsCollection = client.db("yourmoto").collection("products");
+    const bookedItemsCollection = client.db("yourmoto").collection("booked-items");
 
     /* -----------Verify Admin---------- */
     const verifyAdmin = async (req, res, next) => {
       const decodedEmail = req.decoded.email;
       const query = { email: decodedEmail };
-      console.log(query);
       const user = await usersCollection.findOne(query);
-      console.log(user);
+      if (user?.role !== "admin") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      console.log('admin true')
+      next();
+    };
+    /* -----------Verify Seller---------- */
+    const verifySeller = async (req, res, next) => {
+      const decodedEmail = req.decoded.email;
+      const query = { email: decodedEmail };
+      const user = await usersCollection.findOne(query);
       if (user?.role !== "seller") {
         return res.status(403).send({ message: "forbidden access" });
       }
+      console.log('seller true')
       next();
     };
 
     /* --------- JWT ------ */
-    app.get("/jwt", async (req, res) => {
-      const email = req.query.email;
-      const query = { email: email };
-      const user = await usersCollection.findOne(query);
+    app.put("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = req.body
+      const filter = { 
+        email: email
+       }
+      const options = { upsert: true }
+      const updateDoc = {
+        $set: user,
+      }
+      const result = await usersCollection.updateOne(filter, updateDoc, options)
       if (user) {
         const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, {
           expiresIn: "5h",
         });
-        console.log(token)
-        return res.send({ accessToken: token });
+        return res.send({ result, token });
       }
-      res.status(403).send({ accessToken: "" });
+      res.status(403).send({ token: "" });
     });
 
   
 
     /* ---------Categories------- */
-    app.get("/categories",  async (req, res) => {
+    app.get("/categories",verifyJWT, verifySeller,  async (req, res) => {
       const query = {};
       const result = await categoriesCollection.find(query).toArray();
       res.send(result);
@@ -102,17 +116,24 @@ async function run() {
     /* ------------Add Product to Database----------- */
     app.post("/products", async (req, res) => {
       const product = req.body;
-      console.log(product);
       const result = await productsCollection.insertOne(product);
       res.send(result);
     });
     /* --------------Get Product by CategoryName------------- */
-    app.get("/categories/:categoryName",verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/categories/:categoryName", async (req, res) => {
       const categoryName = req.params.categoryName;
       const query = { bike_type: categoryName };
       const result = await productsCollection.find(query).toArray();
       res.send(result);
     });
+
+
+    /* -------------Booked Items-------------- */
+    app.post("/booked-items", async(req, res) => {
+        const bookedItem = req.body;
+        const result = await bookedItemsCollection.insertOne(bookedItem);
+        res.send(result);
+    })
     // app.get('/add', async(req,res) => {
     //     const filter = {};
     //     const options = {upsert: true};
