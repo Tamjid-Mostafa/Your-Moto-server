@@ -12,6 +12,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+/* -------------JWT Decode------------  */
+function verifyJWT(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).send({ message: "Unauthorized Access" });
+  }
+  const token = authHeader.split(" ")[1];
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+    if (err) {
+      return res.status(403).send({ message: "Forbidden Access" });
+    }
+    console.log(decoded);
+    req.decoded = decoded;
+    next();
+  });
+}
+
+/* ----------Database Connection---------- */
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.j8jry5z.mongodb.net/?retryWrites=true&w=majority`;
 
 console.log(uri);
@@ -28,16 +48,32 @@ async function run() {
     const usersCollection = client.db("yourmoto").collection("users");
     const productsCollection = client.db("yourmoto").collection("products");
 
-    const verifyAdmin = async(req, res, next) => {
-        const decodedEmail = req.decoded.email;
-        const query = { email: decodedEmail };
-        const user = await usersCollection.findOne(query);
-        console.log(user);
-        if (user?.role !== "admin") {
-            return res.status(403).send({ message: "forbidden access" });
-          }
-          next();
-    }
+    /* -----------Verify Admin---------- */
+    const verifyAdmin = async (req, res, next) => {
+      const decodedEmail = req.decoded.email;
+      const query = { email: decodedEmail };
+      const user = await usersCollection.findOne(query);
+      console.log(user);
+      if (user?.role !== "admin") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
+
+    /* --------- JWT ------ */
+    app.put("/jwt", async (req, res) => {
+      const email = req.params.email;
+      const filter = { email: email };
+      const user = await usersCollection.findOne(query);
+      if (user) {
+        const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, {
+          expiresIn: "5h",
+        });
+        return res.send({ accessToken: token });
+      }
+      res.status(403).send({ accessToken: "" });
+    });
+
 
     /* ---------Categories------- */
     app.get("/categories", async (req, res) => {
@@ -46,39 +82,47 @@ async function run() {
       res.send(result);
     });
 
-   
-
     /* ----------User Information---------- */
     app.post("/users", async (req, res) => {
       const user = req.body;
-    //   console.log(user);
+      //   console.log(user);
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
     /* -----------Single User---------- */
-    app.get('/users/:email',  async (req, res) => {
-        const email = req.params.email
-        const query = { email: email }
-        const user = await usersCollection.findOne(query)
-        res.send(user)
-      })
-
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      res.send(user);
+    });
 
     /* ------------Add Product to Database----------- */
-    app.post("/products", async(req, res) => {
-        const product = req.body;
-        console.log(product);
-        const result = await productsCollection.insertOne(product);
-        res.send(result);
-    })
+    app.post("/products", async (req, res) => {
+      const product = req.body;
+      console.log(product);
+      const result = await productsCollection.insertOne(product);
+      res.send(result);
+    });
     /* --------------Get Product by CategoryName------------- */
-     app.get("/categories/:categoryName", async(req, res) => {
-        const categoryName = req.params.categoryName;
-        const query = {bike_type:categoryName}
-        const result = await productsCollection.find(query).toArray();
-        res.send(result);
-    })
-    
+    app.get("/categories/:categoryName", async (req, res) => {
+      const categoryName = req.params.categoryName;
+      const query = { bike_type: categoryName };
+      const result = await productsCollection.find(query).toArray();
+      res.send(result);
+    });
+    // app.get('/add', async(req,res) => {
+    //     const filter = {};
+    //     const options = {upsert: true};
+    //     const updatedDoc = {
+    //       $set: {
+    //         years_of_use: 2,
+    //       },
+    //     };
+    //     const result =await productsCollection.updateMany(filter, updatedDoc, options)
+    //     res.send(result);
+
+    //   })
   } finally {
   }
 }
