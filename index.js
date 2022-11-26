@@ -15,6 +15,7 @@ app.use(express.json());
 /* -------------JWT Decode------------  */
 function verifyJWT(req, res, next) {
   const authHeader = req.headers.authorization;
+  console.log("token inside verifyJWT", req.headers.authorization);
   if (!authHeader) {
     return res.status(401).send({ message: "Unauthorized Access" });
   }
@@ -46,19 +47,20 @@ async function run() {
     const bookedItemsCollection = client.db("yourmoto").collection("booked-items");
 
     /* -----------Verify Admin---------- */
-    const verifyAdmin = async (req, res, next) => {
-      const decodedEmail = req.decoded.email;
-      const query = { email: decodedEmail };
-      const user = await usersCollection.findOne(query);
-      if (user?.role !== "admin") {
-        return res.status(403).send({ message: "forbidden access" });
-      }
-      console.log('admin true')
-      next();
-    };
+    // const verifyAdmin = async (req, res, next) => {
+    //   const decodedEmail = req.decoded.email;
+    //   const query = { email: decodedEmail };
+    //   const user = await usersCollection.findOne(query);
+    //   if (user?.role !== "admin") {
+    //     return res.status(403).send({ message: "forbidden access" });
+    //   }
+    //   console.log('admin true')
+    //   next();
+    // };
     /* -----------Verify Seller---------- */
     const verifySeller = async (req, res, next) => {
       const decodedEmail = req.decoded.email;
+      console.log(decodedEmail);
       const query = { email: decodedEmail };
       const user = await usersCollection.findOne(query);
       if (user?.role !== "seller") {
@@ -72,21 +74,15 @@ async function run() {
     app.put("/user/:email", async (req, res) => {
       const email = req.params.email;
       const user = req.body
-      const filter = { 
-        email: email
-       }
+      const filter = {email: email}
       const options = { upsert: true }
       const updateDoc = {
         $set: user,
       }
       const result = await usersCollection.updateOne(filter, updateDoc, options)
-      if (user) {
-        const token = jwt.sign({ email }, process.env.ACCESS_TOKEN, {
-          expiresIn: "5h",
-        });
-        return res.send({ result, token });
-      }
-      res.status(403).send({ token: "" });
+        const token = jwt.sign(user, process.env.ACCESS_TOKEN, {
+          expiresIn: "5h",})
+          res.send({ result, token });
     });
 
   
@@ -130,9 +126,9 @@ async function run() {
 
     /* -------------Booked Items-------------- */
     app.post("/booked-items", async(req, res) => {
-        const bookedItem = req.body;
-        const result = await bookedItemsCollection.insertOne(bookedItem);
-        res.send(result);
+      const bookedItem = req.body;
+      const result = await bookedItemsCollection.insertOne(bookedItem);
+      res.send(result);
     })
     // app.get('/add', async(req,res) => {
     //     const filter = {};
