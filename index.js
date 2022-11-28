@@ -45,6 +45,7 @@ async function run() {
     const bookedItemsCollection = client
       .db("yourmoto")
       .collection("booked-items");
+    const paymentsCollection = client.db("yourmoto").collection("payments");
 
     /* -----------Verify Admin---------- */
     const verifyAdmin = async (req, res, next) => {
@@ -103,6 +104,15 @@ async function run() {
       const user = await usersCollection.findOne(query);
       res.send(user);
     });
+
+    /* -----------Seller List Query (Get)---------- */
+    app.get("/sellers", async (req, res) => {
+      const role = req.query.role;
+      const query = { role: "seller" };
+      const result = await usersCollection.find(query).toArray();
+      res.send(result);
+    });
+
     /* --------------Get Product by CategoryName (Get)---------- */
     app.get("/categories/:categoryName", async (req, res) => {
       const categoryName = req.params.categoryName;
@@ -111,12 +121,21 @@ async function run() {
       res.send(result);
     });
     /* --------------Get My Products Email Query (Get)---------- */
-    app.get("/myproducts",verifyJWT, verifySeller, async (req, res) => {
+    app.get("/myproducts", verifyJWT, verifySeller, async (req, res) => {
       const email = req.query.email;
       const query = { sellerEmail: email };
       const result = await productsCollection.find(query).toArray();
       res.send(result);
     });
+    /* --------------Get Advertised Items Query (Get)---------- */
+
+    app.get("/advertise", async (req, res) => {
+      const advertise = req.query.advertise;
+      const query = { advertise: true };
+      const result = await productsCollection.find(query).toArray();
+      res.send(result);
+    });
+
     /* --------------Get Buyer Booked Items Email Query (Get)---------- */
     app.get("/bookedItems", async (req, res) => {
       const email = req.query.email;
@@ -131,6 +150,7 @@ async function run() {
       const user = await bookedItemsCollection.findOne(query);
       res.send(user);
     });
+
     /* _____________________________POST___________________________________ */
 
     /* ----------User Information---------- */
@@ -155,27 +175,46 @@ async function run() {
     });
 
     /* ---------------Create Payment Intent----------- */
-    app.post('/create-payment-intent', async(req, res) => {
+    app.post("/create-payment-intent", async (req, res) => {
       const booking = req.body;
       const price = booking.price;
       const amount = price * 100;
       const paymentIntent = await stripe.paymentIntents.create({
-        currency: 'usd',
+        currency: "usd",
         amount: amount,
-        "payment_method_types": [
-          "card"
-        ],
+        payment_method_types: ["card"],
       });
       res.send({
         clientSecret: paymentIntent.client_secret,
-      })
-    })
+      });
+    });
 
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const result = await paymentsCollection.insertOne(payment);
+      const id = payment.bookingId;
+      const filter = { _id: ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          paid: true,
+          transactionId: payment.transactionId,
+        },
+      };
+      const updatedResult = await bookedItemsCollection.updateOne(
+        filter,
+        updatedDoc
+      );
+      res.send(result);
+    });
 
     /* __________________PUT_______________ */
 
     /* ---------------Make Item Advertise----------- */
-    app.put("/myproduct/advertise/:id", verifyJWT, verifySeller, async (req, res) => {
+    app.put(
+      "/myproduct/advertise/:id",
+      verifyJWT,
+      verifySeller,
+      async (req, res) => {
         const id = req.params.id;
         const filter = { _id: ObjectId(id) };
         const options = { upsert: true };
@@ -191,25 +230,65 @@ async function run() {
         );
         console.log(result);
         res.send(result);
-      });
+      }
+    );
 
+    /* ----------Update Verify Seller--------- */
+    app.put("/sellers/:email", verifyJWT, verifyAdmin, async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const options = { upsert: true };
+      const updatedDoc = {
+        $set: {
+          verify: true,
+        },
+      };
+      const result = await usersCollection.updateOne(
+        query,
+        updatedDoc,
+        options
+      );
+      const filter = { sellerEmail: email };
+      const updatedSeller = {
+        $set: {
+          sellerVerify: true,
+        },
+      };
+      const updatedResult = await productsCollection.updateOne(
+        filter,
+        updatedSeller
+      );
 
+      res.send(result);
+    });
 
-      /* __________________DELETE_______________ */
+    /* __________________DELETE_______________ */
 
-      app.delete("/delete_product/:id", verifyJWT, verifySeller, async (req, res) => {
+    app.delete(
+      "/delete_product/:id",
+      verifyJWT,
+      verifySeller,
+      async (req, res) => {
         const id = req.params.id;
         const filter = { _id: ObjectId(id) };
         const result = await productsCollection.deleteOne(filter);
         res.send(result);
-      });
-      app.delete("/deletebooked/:id", async (req, res) => {
-        const id = req.params.id;
-        const filter = { _id: ObjectId(id) };
-        const result = await bookedItemsCollection.deleteOne(filter);
-        res.send(result);
-      });
+      }
+    );
+    app.delete("/deletebooked/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: ObjectId(id) };
+      const result = await bookedItemsCollection.deleteOne(filter);
+      res.send(result);
+    });
 
+    /* -------------Delete User ---------- */
+    app.delete("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: ObjectId(id) };
+      const result = await usersCollection.deleteOne(filter);
+      res.send(result);
+    });
 
     // app.get('/add', async(req,res) => {
     //     const filter = {};
