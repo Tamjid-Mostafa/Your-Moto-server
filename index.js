@@ -112,6 +112,13 @@ async function run() {
       const result = await usersCollection.find(query).toArray();
       res.send(result);
     });
+    /* -----------Buyer List Query (Get)---------- */
+    app.get("/buyers", async (req, res) => {
+      const role = req.query.role;
+      const query = { role: "buyer" };
+      const result = await usersCollection.find(query).toArray();
+      res.send(result);
+    });
 
     /* --------------Get Product by CategoryName (Get)---------- */
     app.get("/categories/:categoryName", async (req, res) => {
@@ -171,6 +178,16 @@ async function run() {
     app.post("/booked-items", async (req, res) => {
       const bookedItem = req.body;
       const result = await bookedItemsCollection.insertOne(bookedItem);
+      const filter = { sellerEmail: email };
+      const updatedSeller = {
+        $set: {
+          booked: true,
+        },
+      };
+      const updatedResult = await productsCollection.updateOne(
+        filter,
+        updatedSeller
+      );
       res.send(result);
     });
 
@@ -295,7 +312,7 @@ async function run() {
     //     const options = {upsert: true};
     //     const updatedDoc = {
     //       $set: {
-    //         advertise: false,
+    //         booked: false,
     //       },
     //     };
     //     const result =await productsCollection.updateMany(filter, updatedDoc, options)
