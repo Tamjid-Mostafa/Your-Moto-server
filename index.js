@@ -142,6 +142,15 @@ async function run() {
       const result = await productsCollection.find(query).toArray();
       res.send(result);
     });
+    /* --------------Get Advertised Items Query (Get)---------- */
+
+    app.get("/reportedItems", verifyJWT, verifyAdmin
+    , async (req, res) => {
+      const report = req.query.report;
+      const query = { report: true };
+      const result = await productsCollection.find(query).toArray();
+      res.send(result);
+    });
 
     /* --------------Get Buyer Booked Items Email Query (Get)---------- */
     app.get("/bookedItems", async (req, res) => {
@@ -178,6 +187,7 @@ async function run() {
     app.post("/booked-items", async (req, res) => {
       const bookedItem = req.body;
       const result = await bookedItemsCollection.insertOne(bookedItem);
+      const email = req.params.sellerEmail;
       const filter = { sellerEmail: email };
       const updatedSeller = {
         $set: {
@@ -249,6 +259,26 @@ async function run() {
         res.send(result);
       }
     );
+    /* ---------------Reported Item API----------- */
+    app.put(
+      "/report/:id",
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: ObjectId(id) };
+        const options = { upsert: true };
+        const updatedDoc = {
+          $set: {
+            report: true,
+          },
+        };
+        const result = await productsCollection.updateOne(
+          filter,
+          updatedDoc,
+          options
+        );
+        res.send(result);
+      }
+    );
 
     /* ----------Update Verify Seller--------- */
     app.put("/sellers/:email", verifyJWT, verifyAdmin, async (req, res) => {
@@ -285,6 +315,20 @@ async function run() {
       "/delete_product/:id",
       verifyJWT,
       verifySeller,
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: ObjectId(id) };
+        const result = await productsCollection.deleteOne(filter);
+        res.send(result);
+      }
+    );
+
+
+    /* -----------Reported Item Delete---------- */
+    app.delete(
+      "/deleteReportedItem/:id",
+      verifyJWT,
+      verifyAdmin,
       async (req, res) => {
         const id = req.params.id;
         const filter = { _id: ObjectId(id) };
